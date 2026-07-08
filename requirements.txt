@@ -1,0 +1,6 @@
+fastapi 
+uvicorn 
+httpx 
+langchain-chroma 
+langchain-community 
+sentence-transformers
