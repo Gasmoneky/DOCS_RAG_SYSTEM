@@ -21,7 +21,7 @@ RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/wh
 
 RUN pip install --no-cache-dir -r requirements.txt
 
-RUN python -c "from langchain_community.embeddings import HuggingFaceEmbeddings; HugFaceEmbeddings(model_name='all-MiniLM-L6-v2')"
+
 
 EXPOSE 11435
 CMD ["python", "DOCS_RAG_SYSTEM/fastapi_rag_system.py"]
