@@ -6,12 +6,22 @@ if [ "$EUID" -ne 0 ]; then
   exit 1
 fi
 
+# Detect the real user who ran sudo, otherwise default to current user
+REAL_USER=${SUDO_USER:-$(whoami)}
+
+if [ "$REAL_USER" = "root" ]; then
+    # If we are truly logged in directly as root on a server
+    BASE_DIR="/root"
+else
+    # If we are on a desktop using 'sudo ./setup.sh'
+    BASE_DIR="/home/$REAL_USER"
+fi
+
 echo "===================================================="
 echo " Starting Automated RAG System Installation..."
 echo "===================================================="
 
 PROJECT_DIR="$BASE_DIR/DOCS_RAG_SYSTEM"
-ENV_FILE="$SCRIPT_DIR/.env"
 DOCS_DIR="$BASE_DIR/drogonmd_files"
 SCRIPT_PATH="$PROJECT_DIR/auto_update_rag.sh"
 SERVICE_PATH="/etc/systemd/system/rag-updater.service"
@@ -24,16 +34,51 @@ mkdir -p "$DOCS_DIR"
 echo "🛠️ Creating background sync script..."
 cat << 'EOF' > "$SCRIPT_PATH"
 #!/bin/bash
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Fallback dynamic directory locator for systemd contexts
+if [ -n "$BASH_SOURCE" ]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+else
+    SCRIPT_DIR="$(pwd)"
+fi
+
+# If systemd strips the path context, fall back to default project path safely
+if [ -z "$SCRIPT_DIR" ] || [ "$SCRIPT_DIR" = "/" ]; then
+    # Auto-fallback to absolute context if systemd loses context
+    SCRIPT_DIR="$(dirname "$0")"
+    if [ "$SCRIPT_DIR" = "." ] || [ "$SCRIPT_DIR" = "/" ]; then
+        # Last line of defense: Check typical root/home user spaces
+        if [ -d "/root/DOCS_RAG_SYSTEM" ]; then
+            SCRIPT_DIR="/root/DOCS_RAG_SYSTEM"
+        else
+            SCRIPT_DIR=$(find /home -maxdepth 2 -name "DOCS_RAG_SYSTEM" -type d 2>/dev/null | head -n 1)
+        fi
+    fi
+fi
+
+ENV_FILE="$SCRIPT_DIR/.env"
 
 if [ ! -f "$ENV_FILE" ]; then
     echo "CRITICAL ERROR: .env file not found at $ENV_FILE. Please pull it from GitHub or create your own"
     exit 1
 fi
 
-# Load variables from your GitHub-pushed .env file
+# Load variables from your .env file and strip carriage returns
 export $(grep -v '^#' "$ENV_FILE" | xargs)
+
+PROJECT_DIR=$(echo "$PROJECT_DIR" | tr -d '\r')
+DOCS_DIR=$(echo "$DOCS_DIR" | tr -d '\r')
+
+# Dynamic relative path converter in memory
+if [[ "$PROJECT_DIR" == .* ]]; then
+    PROJECT_DIR="$SCRIPT_DIR/${PROJECT_DIR#.}"
+    PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd)"
+fi
+
+if [[ "$DOCS_DIR" == .* ]]; then
+    DOCS_DIR="$SCRIPT_DIR/${DOCS_DIR#.}"
+fi
+
 cd "$PROJECT_DIR" || exit 1
 
 while true; do
