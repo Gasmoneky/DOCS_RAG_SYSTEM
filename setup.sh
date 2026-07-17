@@ -10,8 +10,8 @@ echo "===================================================="
 echo " Starting Automated RAG System Installation..."
 echo "===================================================="
 
-PROJECT_DIR="/root/DOCS_RAG_SYSTEM"
-DOCS_DIR="/root/drogonmd_files"
+PROJECT_DIR="$BASE_DIR/DOCS_RAG_SYSTEM"
+DOCS_DIR="$BASE_DIR/drogonmd_files"
 SCRIPT_PATH="$PROJECT_DIR/auto_update_rag.sh"
 SERVICE_PATH="/etc/systemd/system/rag-updater.service"
 

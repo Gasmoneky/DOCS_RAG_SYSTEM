@@ -13,7 +13,7 @@ services:
       - OLLAMA_INTERNAL_URL=http://host.docker.internal:11434
     volumes:
       - chroma_data:/root/chroma_db
-      - /root/drogonmd_files:/app/documentation
+      - ${DOCS_DIR}:/app/documentation
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
