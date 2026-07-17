@@ -36,23 +36,19 @@ cat << 'EOF' > "$SCRIPT_PATH"
 #!/bin/bash
 
 # Fallback dynamic directory locator for systemd contexts
-if [ -n "$BASH_SOURCE" ]; then
+if [ -n "$BASH_SOURCE" ] && [ "${BASH_SOURCE[0]}" != "." ] && [ -n "${BASH_SOURCE[0]}" ]; then
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 else
+    # Systemd sets the WorkingDirectory, so pwd is our safest source of truth
     SCRIPT_DIR="$(pwd)"
 fi
 
-# If systemd strips the path context, fall back to default project path safely
-if [ -z "$SCRIPT_DIR" ] || [ "$SCRIPT_DIR" = "/" ]; then
-    # Auto-fallback to absolute context if systemd loses context
-    SCRIPT_DIR="$(dirname "$0")"
-    if [ "$SCRIPT_DIR" = "." ] || [ "$SCRIPT_DIR" = "/" ]; then
-        # Last line of defense: Check typical root/home user spaces
-        if [ -d "/root/DOCS_RAG_SYSTEM" ]; then
-            SCRIPT_DIR="/root/DOCS_RAG_SYSTEM"
-        else
-            SCRIPT_DIR=$(find /home -maxdepth 2 -name "DOCS_RAG_SYSTEM" -type d 2>/dev/null | head -n 1)
-        fi
+# Final safety check: if everything returns blank or root slash, hard-resolve it
+if [ -z "$SCRIPT_DIR" ] || [ "$SCRIPT_DIR" = "/" ] || [ "$SCRIPT_DIR" = "." ]; then
+    if [ -d "/root/DOCS_RAG_SYSTEM" ]; then
+        SCRIPT_DIR="/root/DOCS_RAG_SYSTEM"
+    else
+        SCRIPT_DIR=$(find /home -maxdepth 2 -name "DOCS_RAG_SYSTEM" -type d 2>/dev/null | head -n 1)
     fi
 fi
 
