@@ -11,6 +11,7 @@ echo " Starting Automated RAG System Installation..."
 echo "===================================================="
 
 PROJECT_DIR="$BASE_DIR/DOCS_RAG_SYSTEM"
+ENV_FILE="$SCRIPT_DIR/.env"
 DOCS_DIR="$BASE_DIR/drogonmd_files"
 SCRIPT_PATH="$PROJECT_DIR/auto_update_rag.sh"
 SERVICE_PATH="/etc/systemd/system/rag-updater.service"
@@ -24,7 +25,7 @@ echo "🛠️ Creating background sync script..."
 cat << 'EOF' > "$SCRIPT_PATH"
 #!/bin/bash
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ENV_FILE="$SCRIPT_DIR/.env"
+
 
 if [ ! -f "$ENV_FILE" ]; then
     echo "CRITICAL ERROR: .env file not found at $ENV_FILE. Please pull it from GitHub or create your own"
