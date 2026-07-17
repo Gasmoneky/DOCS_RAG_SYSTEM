@@ -11,10 +11,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-RUN git clone https://github.com/Gasmoneky/DOCS_RAG_SYSTEM.git
-# Here place the git url of the documentation in like here
-RUN git clone https://github.com/Gasmoneky/drogonmd_files.git
-
 COPY requirements.txt .
 
 RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
