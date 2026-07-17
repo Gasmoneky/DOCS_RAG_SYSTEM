@@ -18,7 +18,7 @@ app.add_middleware(
     allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
 )
 
-DB_DIR = ""  # enter the location your db
+DB_DIR = os.getenv("DB_DIR", "/root/chroma_db")
 OLLAMA_INTERNAL_URL = os.getenv("OLLAMA_INTERNAL_URL", "http://127.0.0.1:11434")
 
 # Load the Chroma Vector DBs
@@ -111,7 +111,6 @@ async def chat_endpoint(request: Request):
     user_query = messages[-1].get("content", "")
 
     # RAG Logic
-    docs = vector_store.similarity_search(user_query, k=4)
     context_chunk = "\n\n".join([doc.page_content for doc in docs])
 
     system_instruction = (

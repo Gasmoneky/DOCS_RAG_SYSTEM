@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 RUN git clone https://github.com/Gasmoneky/DOCS_RAG_SYSTEM.git
-# Here place the git url of the documentation in like
+# Here place the git url of the documentation in like here
 RUN git clone https://github.com/Gasmoneky/drogonmd_files.git
 
 COPY requirements.txt .
