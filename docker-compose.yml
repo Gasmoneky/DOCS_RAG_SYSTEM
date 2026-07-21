@@ -3,6 +3,8 @@ version: "3.8"
 services:
   rag-proxy:
     build: .
+    env_file:
+      - .env
     container_name: rag-proxy
     restart: unless-stopped
     ports:
