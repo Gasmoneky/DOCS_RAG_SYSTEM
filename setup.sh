@@ -10,10 +10,8 @@ fi
 REAL_USER=${SUDO_USER:-$(whoami)}
 
 if [ "$REAL_USER" = "root" ]; then
-    # If we are truly logged in directly as root on a server
     BASE_DIR="/root"
 else
-    # If we are on a desktop using 'sudo ./setup.sh'
     BASE_DIR="/home/$REAL_USER"
 fi
 
@@ -35,20 +33,13 @@ echo "🛠️ Creating background sync script..."
 cat << 'EOF' > "$SCRIPT_PATH"
 #!/bin/bash
 
-# Fallback dynamic directory locator for systemd contexts
-if [ -n "$BASH_SOURCE" ] && [ "${BASH_SOURCE[0]}" != "." ] && [ -n "${BASH_SOURCE[0]}" ]; then
-    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-else
-    # Systemd sets the WorkingDirectory, so pwd is our safest source of truth
-    SCRIPT_DIR="$(pwd)"
-fi
-
-# Final safety check: if everything returns blank or root slash, hard-resolve it
-if [ -z "$SCRIPT_DIR" ] || [ "$SCRIPT_DIR" = "/" ] || [ "$SCRIPT_DIR" = "." ]; then
-    if [ -d "/root/DOCS_RAG_SYSTEM" ]; then
-        SCRIPT_DIR="/root/DOCS_RAG_SYSTEM"
+# Systemd provides the absolute path via the environment variable we set in the service profile
+if [ -z "$SCRIPT_DIR" ]; then
+    # Fallback if run manually outside of systemd
+    if [ -n "$BASH_SOURCE" ] && [ "${BASH_SOURCE[0]}" != "." ] && [ -n "${BASH_SOURCE[0]}" ]; then
+        SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     else
-        SCRIPT_DIR=$(find /home -maxdepth 2 -name "DOCS_RAG_SYSTEM" -type d 2>/dev/null | head -n 1)
+        SCRIPT_DIR="$(pwd)"
     fi
 fi
 
@@ -124,6 +115,7 @@ echo " Worker script initialized at $SCRIPT_PATH"
 
 # 2. Create and register the systemd Service file
 echo " Registering systemd daemon service..."
+# Note: We explicitly set Environment=SCRIPT_DIR=... here so systemd forces the path into the script!
 cat << EOF > "$SERVICE_PATH"
 [Unit]
 Description=12-Hour GitHub Ingestion Sync and Complete Docker Cache Purge
@@ -134,6 +126,7 @@ Requires=docker.service
 Type=simple
 User=root
 WorkingDirectory=$PROJECT_DIR
+Environment=SCRIPT_DIR=$PROJECT_DIR
 ExecStart=/bin/bash $SCRIPT_PATH
 Restart=always
 RestartSec=15
