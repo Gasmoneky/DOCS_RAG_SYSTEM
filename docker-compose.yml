@@ -6,7 +6,7 @@ services:
     env_file:
       - .env
     container_name: rag-proxy
-    network_mode: host
+    network_mode: "host"
     restart: unless-stopped
     ports:
       - "11435:11435"
