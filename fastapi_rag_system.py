@@ -53,11 +53,11 @@ def run_ingestion():
         # 3. Embed and insert into ChromaDB vector store
         vector_store.add_documents(docs)
         print(
-            f"✅ [INGEST] Successfully indexed {len(docs)} text chunks into Chroma DB at {DB_DIR}!"
+            f"[INGEST] Successfully indexed {len(docs)} text chunks into Chroma DB at {DB_DIR}!"
         )
 
     except Exception as e:
-        print(f"❌ [INGEST] Failed during ingestion: {str(e)}")
+        print(f"[INGEST] Failed during ingestion: {str(e)}")
 
 
 # --- LIFESPAN EVENT (Runs on Server Boot) ---
