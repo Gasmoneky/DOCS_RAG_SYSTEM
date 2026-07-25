@@ -172,7 +172,7 @@ async def chat_endpoint(request: Request):
     user_query = messages[-1].get("content", "")
 
     # Retrieve relevant document chunks from ChromaDB dynamically based on user query
-    retriever = vector_store.as_retriever(search_kwargs={"k": 4})
+    retriever = vector_store.as_retriever(search_kwargs={"k": 3})
     docs = retriever.invoke(user_query)
 
     context_chunk = "\n\n".join([doc.page_content for doc in docs])
