@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 import json
 import os
 import httpx
@@ -5,9 +6,69 @@ from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from langchain_chroma import Chroma
+from langchain_community.document_loaders import DirectoryLoader, TextLoader
 from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-app = FastAPI()
+# --- CONFIGURATION & ENV PATHS ---
+DB_DIR = os.getenv("DB_DIR", "/root/chroma_db")
+DOCS_DIR = os.getenv("DOCS_DIR", "/app/documentation")
+OLLAMA_INTERNAL_URL = os.getenv("OLLAMA_INTERNAL_URL", "http://127.0.0.1:11434")
+
+# Load embeddings engine and vector database store
+embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+vector_store = Chroma(persist_directory=DB_DIR, embedding_function=embeddings)
+
+
+# --- AUTOMATED INGESTION LOGIC ---
+def run_ingestion():
+    """Reads markdown/text files from DOCS_DIR, splits into chunks, and saves to ChromaDB."""
+    if not os.path.exists(DOCS_DIR):
+        print(
+            f"[INGEST] Directory {DOCS_DIR} does not exist. Skipping ingestion."
+        )
+        return
+
+    print(f"[INGEST] Starting document ingestion from: {DOCS_DIR}")
+
+    try:
+        # 1. Load all markdown files recursively from your docs path
+        loader = DirectoryLoader(
+            DOCS_DIR, glob="**/*.md", loader_cls=TextLoader
+        )
+        raw_documents = loader.load()
+
+        if not raw_documents:
+            print("[INGEST] No markdown (.md) documents found to ingest.")
+            return
+
+        print(f"[INGEST] Loaded {len(raw_documents)} raw document(s).")
+
+        # 2. Chunk documents into optimized contexts
+        text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=1000, chunk_overlap=200
+        )
+        docs = text_splitter.split_documents(raw_documents)
+
+        # 3. Embed and insert into ChromaDB vector store
+        vector_store.add_documents(docs)
+        print(
+            f"✅ [INGEST] Successfully indexed {len(docs)} text chunks into Chroma DB at {DB_DIR}!"
+        )
+
+    except Exception as e:
+        print(f"❌ [INGEST] Failed during ingestion: {str(e)}")
+
+
+# --- LIFESPAN EVENT (Runs on Server Boot) ---
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # This executes IMMEDIATELY when Uvicorn starts up the app
+    run_ingestion()
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
 
 # --- CORS MIDDLEWARE ---
 app.add_middleware(
@@ -18,15 +79,8 @@ app.add_middleware(
     allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
 )
 
-DB_DIR = os.getenv("DB_DIR", "/root/chroma_db")
-OLLAMA_INTERNAL_URL = os.getenv("OLLAMA_INTERNAL_URL", "http://127.0.0.1:11434")
 
-# Load the Chroma Vector DBs
-embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-vector_store = Chroma(persist_directory=DB_DIR, embedding_function=embeddings)
-
-
-# --- HANDSHAKE ENDPOINTS ---
+# --- HANDSHAKE & MANUAL INGEST ENDPOINTS ---
 
 
 @app.get("/")
@@ -39,6 +93,13 @@ async def version_check():
     return {"version": "0.3.0"}
 
 
+@app.post("/api/ingest")
+async def manual_ingest_trigger():
+    """Manual endpoint to trigger document re-ingestion on demand."""
+    run_ingestion()
+    return {"status": "success", "message": "Ingestion triggered."}
+
+
 @app.post("/api/show")
 async def show_model(request: Request):
     try:
@@ -48,9 +109,10 @@ async def show_model(request: Request):
 
     try:
         async with httpx.AsyncClient() as client:
-            # Pass the exact payload your Flutter app sent straight into Ollama
             ollama_res = await client.post(
-                f"{OLLAMA_INTERNAL_URL}/api/show", json=client_data, timeout=5.0
+                f"{OLLAMA_INTERNAL_URL}/api/show",
+                json=client_data,
+                timeout=5.0,
             )
 
             if ollama_res.status_code == 200:
@@ -62,7 +124,8 @@ async def show_model(request: Request):
 
     except httpx.RequestError as e:
         return JSONResponse(
-            status_code=500, content={"error": f"Failed to connect to Ollama: {str(e)}"}
+            status_code=500,
+            content={"error": f"Failed to connect to Ollama: {str(e)}"},
         )
 
 
@@ -71,7 +134,6 @@ async def show_model(request: Request):
 async def get_models():
     try:
         async with httpx.AsyncClient() as client:
-            # Ask Ollama directly for its true local list of models
             ollama_res = await client.get(
                 f"{OLLAMA_INTERNAL_URL}/api/tags", timeout=5.0
             )
@@ -85,7 +147,8 @@ async def get_models():
 
     except httpx.RequestError as e:
         return JSONResponse(
-            status_code=500, content={"error": f"Failed to connect to Ollama: {str(e)}"}
+            status_code=500,
+            content={"error": f"Failed to connect to Ollama: {str(e)}"},
         )
 
 
@@ -101,8 +164,6 @@ async def chat_endpoint(request: Request):
 
     messages = data.get("messages", [])
     stream = data.get("stream", True)
-
-    # FIX: Dynamically pull the model selected by your Flutter app
     requested_model = data.get("model", "qwen2.5-coder:3b")
 
     if not messages:
@@ -110,18 +171,20 @@ async def chat_endpoint(request: Request):
 
     user_query = messages[-1].get("content", "")
 
-    # RAG Logic
+    # Retrieve relevant document chunks from ChromaDB dynamically based on user query
+    retriever = vector_store.as_retriever(search_kwargs={"k": 4})
+    docs = retriever.invoke(user_query)
+
     context_chunk = "\n\n".join([doc.page_content for doc in docs])
 
     system_instruction = (
-        "You are an expert in the data that u have been given "
+        "You are an expert in the data that u have been given. "
         "Answer the question strictly utilizing the official documentation context provided below.\n\n"
         f"Context:\n{context_chunk}"
     )
 
     updated_messages = [{"role": "system", "content": system_instruction}] + messages
 
-    # The payload model parameter is now entirely driven by your Flutter selection
     payload = {
         "model": requested_model,
         "messages": updated_messages,
@@ -144,7 +207,8 @@ async def chat_endpoint(request: Request):
                                 yield line + "\n"
             except httpx.RequestError as e:
                 yield (
-                    json.dumps({"error": f"Stream transport dropped: {str(e)}"}) + "\n"
+                    json.dumps({"error": f"Stream transport dropped: {str(e)}"})
+                    + "\n"
                 )
 
         return StreamingResponse(
@@ -163,5 +227,4 @@ async def chat_endpoint(request: Request):
 if __name__ == "__main__":
     import uvicorn
 
-    # Start the fast asynchronous server engine
     uvicorn.run(app, host="0.0.0.0", port=11435)
