@@ -19,4 +19,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 EXPOSE 11435
-CMD ["python", "DOCS_RAG_SYSTEM/fastapi_rag_system.py"]
+CMD ["python", "fastapi_rag_system.py"]
