@@ -8,8 +8,7 @@ services:
     container_name: rag-proxy
     network_mode: "host"
     restart: unless-stopped
-    ports:
-      - "11435:11435"
+
     environment:
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONUNBUFFERED=1
